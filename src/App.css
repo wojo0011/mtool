@@ -1,0 +1,245 @@
+#root {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+.drawing-canvas-wrapper {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.shape-menu {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  width: 320px;
+  height: 100%;
+  padding: 1.5rem 1.25rem;
+  background: #f8fafc;
+  border-right: 1px solid #cbd5e1;
+  transform: translateX(-100%);
+  transition: transform 220ms ease;
+  overflow-y: auto;
+}
+
+.shape-menu__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  margin-right: 0;
+  margin-bottom: 0.5rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shape-menu__close:hover {
+  border-color: #94a3b8;
+}
+
+.shape-menu--open {
+  transform: translateX(0);
+}
+
+.shape-menu__header {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.shape-menu__shape-id-circle {
+  width: 88px;
+  height: 88px;
+  border-radius: 999px;
+  border: 4px solid #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.shape-menu__delete-row {
+  display: flex;
+  justify-content: center;
+  margin-top: -0.5rem;
+  margin-bottom: 1rem;
+}
+
+.shape-menu__delete-button {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #dc2626;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.shape-menu__delete-button:hover {
+  background: #ffe4e6;
+  border-color: #fca5a5;
+}
+
+.shape-menu__section {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.shape-menu__title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.shape-menu__coordinates {
+  margin: 0;
+  padding-left: 1rem;
+  color: #334155;
+  font-size: 0.95rem;
+}
+
+.shape-menu__coordinate-item {
+  padding: 0.1rem 0.2rem;
+  border-radius: 6px;
+}
+
+.shape-menu__coordinate-item--active {
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 700;
+}
+
+.shape-menu__hint {
+  margin: 0 0 0.6rem;
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+.shape-menu__name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.shape-menu__name-input {
+  flex: 1;
+  height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0 0.65rem;
+  font-size: 0.9rem;
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.shape-menu__name-input:focus {
+  outline: 2px solid #bfdbfe;
+  border-color: #60a5fa;
+}
+
+.shape-menu__name-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.shape-menu__colors {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  justify-items: center;
+  gap: 0.5rem;
+}
+
+.shape-menu__color {
+  display: inline-block;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  max-width: 30px;
+  max-height: 30px;
+  padding: 0;
+  line-height: 0;
+  border-radius: 50%;
+  border: 2px solid #e2e8f0;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.shape-menu__color--selected {
+  border-color: #0f172a;
+  box-shadow: 0 0 0 2px #94a3b8;
+}
+
+.shape-menu__color:hover {
+  border-color: #475569;
+}
+
+.drawing-canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  background-color: #ffffff;
+  border: none;
+  border-radius: 0;
+  cursor: crosshair;
+}
+
+.grid-controls {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.grid-toggle {
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.grid-toggle--active {
+  border-color: #3b82f6;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.grid-slider {
+  width: 66px;
+  height: 18px;
+  accent-color: #3b82f6;
+}
