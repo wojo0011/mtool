@@ -4,6 +4,8 @@
 
 This project includes an automated GitHub Pages deployment workflow in [.github/workflows/deploy-pages.yml](.github/workflows/deploy-pages.yml).
 
+Live site: https://wojo0011.github.io/mtool/
+
 1. Push this repository to GitHub (default branch: `main`).
 2. In GitHub, open **Settings → Pages**.
 3. Under **Build and deployment**, set **Source** to **GitHub Actions**.
