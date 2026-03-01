@@ -42,7 +42,8 @@ const POINT_RADIUS = 4
 const CLOSE_DISTANCE = 10
 const CLOSE_INDICATOR_COLOR = '#16a34a'
 const LABEL_HOVER_RADIUS = 14
-const GRID_SPACING_OPTIONS = [20, 32, 48]
+const LABEL_CIRCLE_RADIUS = 12
+const GRID_SPACING_OPTIONS = [16, 32, 64]
 
 const isPointOnSegment = (point: Point, segmentStart: Point, segmentEnd: Point) => {
   const crossProduct =
@@ -135,6 +136,242 @@ const getPolygonCentroid = (points: Point[]): Point => {
   }
 }
 
+const getHorizontalLineIntersections = (polygon: Point[], y: number): number[] => {
+  const intersections: number[] = []
+
+  for (let index = 0; index < polygon.length; index += 1) {
+    const start = polygon[index]
+    const end = polygon[(index + 1) % polygon.length]
+    const crossesLine = (start.y <= y && end.y > y) || (end.y <= y && start.y > y)
+
+    if (!crossesLine) {
+      continue
+    }
+
+    const x = start.x + ((y - start.y) * (end.x - start.x)) / (end.y - start.y)
+    intersections.push(x)
+  }
+
+  return intersections.sort((a, b) => a - b)
+}
+
+type ScanlineInterval = {
+  y: number
+  startX: number
+  endX: number
+  width: number
+}
+
+const getScanlineIntervals = (points: Point[]): ScanlineInterval[] => {
+  if (points.length < 3) {
+    return []
+  }
+
+  let minY = points[0].y
+  let maxY = points[0].y
+
+  points.forEach((point) => {
+    minY = Math.min(minY, point.y)
+    maxY = Math.max(maxY, point.y)
+  })
+
+  const intervals: ScanlineInterval[] = []
+  const startY = Math.ceil(minY)
+  const endY = Math.floor(maxY)
+
+  for (let y = startY; y <= endY; y += 1) {
+    const scanY = y + 0.5
+
+    if (scanY <= minY || scanY >= maxY) {
+      continue
+    }
+
+    const intersections = getHorizontalLineIntersections(points, scanY)
+
+    for (let index = 0; index + 1 < intersections.length; index += 2) {
+      const startX = intersections[index]
+      const endX = intersections[index + 1]
+      const width = endX - startX
+
+      if (width <= 0) {
+        continue
+      }
+
+      intervals.push({
+        y: scanY,
+        startX,
+        endX,
+        width,
+      })
+    }
+  }
+
+  return intervals
+}
+
+const getLargestSectionCenter = (points: Point[]): Point | null => {
+  const intervals = getScanlineIntervals(points)
+
+  if (intervals.length === 0) {
+    return null
+  }
+
+  const anchor = intervals.reduce((widest, interval) =>
+    interval.width > widest.width ? interval : widest,
+  )
+
+  const widthThreshold = anchor.width * 0.78
+  const overlapThreshold = anchor.width * 0.52
+
+  const nearbyIntervals = intervals
+    .filter((interval) => {
+      if (interval.width < widthThreshold) {
+        return false
+      }
+
+      const overlapStart = Math.max(interval.startX, anchor.startX)
+      const overlapEnd = Math.min(interval.endX, anchor.endX)
+      const overlapWidth = overlapEnd - overlapStart
+
+      return overlapWidth >= overlapThreshold
+    })
+    .sort((left, right) => left.y - right.y)
+
+  if (nearbyIntervals.length === 0) {
+    return {
+      x: (anchor.startX + anchor.endX) / 2,
+      y: anchor.y,
+    }
+  }
+
+  let bestBand: ScanlineInterval[] = []
+  let currentBand: ScanlineInterval[] = []
+
+  nearbyIntervals.forEach((interval) => {
+    if (currentBand.length === 0) {
+      currentBand = [interval]
+      return
+    }
+
+    const previous = currentBand[currentBand.length - 1]
+    const isAdjacentRow = Math.abs(interval.y - previous.y - 1) < 0.001
+
+    if (isAdjacentRow) {
+      currentBand.push(interval)
+      return
+    }
+
+    if (currentBand.length > bestBand.length) {
+      bestBand = currentBand
+    }
+
+    currentBand = [interval]
+  })
+
+  if (currentBand.length > bestBand.length) {
+    bestBand = currentBand
+  }
+
+  const targetBand = bestBand.length > 0 ? bestBand : [anchor]
+  const centerRow = targetBand[Math.floor(targetBand.length / 2)]
+  const center = {
+    x: (centerRow.startX + centerRow.endX) / 2,
+    y: centerRow.y,
+  }
+
+  if (isPointInsidePolygon(center, points)) {
+    return center
+  }
+
+  return {
+    x: (anchor.startX + anchor.endX) / 2,
+    y: anchor.y,
+  }
+}
+
+const getShapeLabelPosition = (points: Point[]): Point => {
+  if (points.length === 0) {
+    return { x: 0, y: 0 }
+  }
+
+  const centroid = getPolygonCentroid(points)
+
+  if (isPointInsidePolygon(centroid, points)) {
+    return centroid
+  }
+
+  const largestSectionCenter = getLargestSectionCenter(points)
+
+  if (largestSectionCenter) {
+    return largestSectionCenter
+  }
+
+  let minY = points[0].y
+  let maxY = points[0].y
+
+  points.forEach((point) => {
+    minY = Math.min(minY, point.y)
+    maxY = Math.max(maxY, point.y)
+  })
+
+  const scanStartY = Math.max(minY + 0.5, Math.min(maxY - 0.5, centroid.y))
+  const maxOffset = Math.ceil(maxY - minY)
+  let bestCandidate: Point | null = null
+  let bestSegmentWidth = -1
+  let bestDistanceFromCentroid = Number.POSITIVE_INFINITY
+
+  for (let offset = 0; offset <= maxOffset; offset += 1) {
+    const scanLines = offset === 0 ? [scanStartY] : [scanStartY - offset, scanStartY + offset]
+
+    for (const y of scanLines) {
+      if (y <= minY || y >= maxY) {
+        continue
+      }
+
+      const intersections = getHorizontalLineIntersections(points, y)
+
+      for (let index = 0; index + 1 < intersections.length; index += 2) {
+        const startX = intersections[index]
+        const endX = intersections[index + 1]
+        const segmentWidth = endX - startX
+
+        if (segmentWidth <= 0) {
+          continue
+        }
+
+        const candidate = {
+          x: (startX + endX) / 2,
+          y,
+        }
+
+        if (!isPointInsidePolygon(candidate, points)) {
+          continue
+        }
+
+        const distanceFromCentroid =
+          Math.abs(candidate.y - centroid.y) + Math.abs(candidate.x - centroid.x) * 0.05
+
+        const isBetterWidth = segmentWidth > bestSegmentWidth
+        const isSameWidthBetterDistance =
+          Math.abs(segmentWidth - bestSegmentWidth) < 0.001 &&
+          distanceFromCentroid < bestDistanceFromCentroid
+
+        if (isBetterWidth || isSameWidthBetterDistance) {
+          bestCandidate = candidate
+          bestSegmentWidth = segmentWidth
+          bestDistanceFromCentroid = distanceFromCentroid
+        }
+      }
+    }
+
+    if (bestCandidate) {
+      return bestCandidate
+    }
+  }
+
+  return points[0]
+}
+
 const getShapeBottomCenter = (points: Point[]): Point => {
   if (points.length === 0) {
     return { x: 0, y: 0 }
@@ -152,7 +389,7 @@ const getShapeBottomCenter = (points: Point[]): Point => {
 
   return {
     x: (minX + maxX) / 2,
-    y: maxY - 10,
+    y: maxY + 10,
   }
 }
 
@@ -166,6 +403,7 @@ function DrawingCanvas() {
   const [draggingShapeLabelIndex, setDraggingShapeLabelIndex] = useState<number | null>(null)
   const [shapeDragLastMousePosition, setShapeDragLastMousePosition] = useState<Point | null>(null)
   const [selectedShapeIndex, setSelectedShapeIndex] = useState<number | null>(null)
+  const [hoveredCoordinateIndex, setHoveredCoordinateIndex] = useState<number | null>(null)
   const [isGridEnabled, setIsGridEnabled] = useState(false)
   const [gridSettingIndex, setGridSettingIndex] = useState(1)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
@@ -273,7 +511,7 @@ function DrawingCanvas() {
 
   const findNearbyShapeLabel = (point: Point): number | null => {
     for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex += 1) {
-      const labelPosition = getPolygonCentroid(shapes[shapeIndex].points)
+      const labelPosition = getShapeLabelPosition(shapes[shapeIndex].points)
 
       if (getDistance(point, labelPosition) <= LABEL_HOVER_RADIUS) {
         return shapeIndex
@@ -367,9 +605,44 @@ function DrawingCanvas() {
   const deleteShapeByIndex = (shapeIndexToDelete: number) => {
     setShapes((previous) => previous.filter((_, index) => index !== shapeIndexToDelete))
     setSelectedShapeIndex(null)
+    setHoveredCoordinateIndex(null)
     setHoveredShapeLabelIndex(null)
     setDraggingShapeLabelIndex(null)
     setShapeDragLastMousePosition(null)
+  }
+
+  const deletePointByIndex = (shapeIndexToUpdate: number, pointIndexToDelete: number) => {
+    setShapes((previous) => {
+      const targetShape = previous[shapeIndexToUpdate]
+
+      if (!targetShape || targetShape.points.length <= 3) {
+        return previous
+      }
+
+      const nextShapes = previous
+        .map((shape, shapeIndex) => {
+          if (shapeIndex !== shapeIndexToUpdate) {
+            return shape
+          }
+
+          return {
+            ...shape,
+            points: shape.points.filter((_, pointIndex) => pointIndex !== pointIndexToDelete),
+          }
+        })
+        .filter((shape) => shape.points.length > 0)
+
+      if (nextShapes.length === 0) {
+        setSelectedShapeIndex(null)
+      } else if (shapeIndexToUpdate >= nextShapes.length) {
+        setSelectedShapeIndex(nextShapes.length - 1)
+      }
+
+      return nextShapes
+    })
+
+    setHoveredCoordinateIndex(null)
+    setHoveredPointTarget(null)
   }
 
   const findShapeContainingPoint = (point: Point): number | null => {
@@ -434,20 +707,20 @@ function DrawingCanvas() {
       return
     }
 
-    const nearbyShapeLabelIndex = findNearbyShapeLabel(point)
-
-    if (nearbyShapeLabelIndex !== null) {
-      setDraggingShapeLabelIndex(nearbyShapeLabelIndex)
-      setShapeDragLastMousePosition(point)
-      setHoveredShapeLabelIndex(nearbyShapeLabelIndex)
-      hasDraggedPointRef.current = false
-      return
-    }
-
     const nearbyPoint = findNearbyPoint(point)
 
     if (nearbyPoint) {
       setDraggingPointTarget(nearbyPoint)
+      hasDraggedPointRef.current = false
+      return
+    }
+
+    const nearbyShapeLabelIndex = findNearbyShapeLabel(point)
+
+    if (nearbyShapeLabelIndex !== null) {
+      setDraggingShapeLabelIndex(nearbyShapeLabelIndex)
+      setShapeDragLastMousePosition(isGridEnabled ? snapPointToGrid(point) : point)
+      setHoveredShapeLabelIndex(nearbyShapeLabelIndex)
       hasDraggedPointRef.current = false
     }
   }
@@ -465,32 +738,43 @@ function DrawingCanvas() {
       return
     }
 
-    setMousePosition(point)
+    const interactionPoint = isGridEnabled ? snapPointToGrid(point) : point
+
+    setMousePosition(interactionPoint)
 
     if (draggingShapeLabelIndex !== null && shapeDragLastMousePosition) {
-      const deltaX = point.x - shapeDragLastMousePosition.x
-      const deltaY = point.y - shapeDragLastMousePosition.y
+      const dragPoint = interactionPoint
+      const deltaX = dragPoint.x - shapeDragLastMousePosition.x
+      const deltaY = dragPoint.y - shapeDragLastMousePosition.y
 
       if (deltaX !== 0 || deltaY !== 0) {
         moveShapeByDelta(draggingShapeLabelIndex, deltaX, deltaY)
         hasDraggedPointRef.current = true
       }
 
-      setShapeDragLastMousePosition(point)
+      setShapeDragLastMousePosition(dragPoint)
       setHoveredShapeLabelIndex(draggingShapeLabelIndex)
       setHoveredPointTarget(null)
       return
     }
 
     if (draggingPointTarget) {
-      updatePointByTarget(draggingPointTarget, snapPointToGrid(point))
+      updatePointByTarget(draggingPointTarget, interactionPoint)
       setHoveredPointTarget(draggingPointTarget)
       setHoveredShapeLabelIndex(null)
       hasDraggedPointRef.current = true
       return
     }
 
-    const nearbyShapeLabelIndex = findNearbyShapeLabel(point)
+    const nearbyPoint = findNearbyPoint(interactionPoint)
+    setHoveredPointTarget(nearbyPoint)
+
+    if (nearbyPoint) {
+      setHoveredShapeLabelIndex(null)
+      return
+    }
+
+    const nearbyShapeLabelIndex = findNearbyShapeLabel(interactionPoint)
 
     if (nearbyShapeLabelIndex !== null) {
       setHoveredShapeLabelIndex(nearbyShapeLabelIndex)
@@ -500,16 +784,9 @@ function DrawingCanvas() {
 
     setHoveredShapeLabelIndex(null)
 
-    const nearbyPoint = findNearbyPoint(point)
-    setHoveredPointTarget(nearbyPoint)
-
-    if (nearbyPoint) {
-      return
-    }
-
     if (currentShapePoints.length >= 3) {
       const first = currentShapePoints[0]
-      const distanceToStart = getDistance(point, first)
+      const distanceToStart = getDistance(interactionPoint, first)
       if (distanceToStart <= CLOSE_DISTANCE) {
         setHoveredPointTarget({ shapeIndex: null, pointIndex: 0 })
       }
@@ -520,6 +797,7 @@ function DrawingCanvas() {
   const handleCanvasMouseLeave = () => {
     setMousePosition(null)
     setHoveredPointTarget(null)
+    setHoveredCoordinateIndex(null)
     setHoveredShapeLabelIndex(null)
     setDraggingPointTarget(null)
     setDraggingShapeLabelIndex(null)
@@ -594,7 +872,7 @@ function DrawingCanvas() {
         context.fill()
       })
 
-      const labelPosition = getPolygonCentroid(shape.points)
+      const labelPosition = getShapeLabelPosition(shape.points)
       const isLabelHovered = hoveredShapeLabelIndex === index && isSelectedShape
 
       if (isLabelHovered) {
@@ -605,11 +883,22 @@ function DrawingCanvas() {
         context.stroke()
       }
 
+      context.fillStyle = '#ffffff'
+      context.beginPath()
+      context.arc(labelPosition.x, labelPosition.y, LABEL_CIRCLE_RADIUS, 0, Math.PI * 2)
+      context.fill()
+
+      context.strokeStyle = isLabelHovered ? CLOSE_INDICATOR_COLOR : displayColor
+      context.lineWidth = isLabelHovered ? 2.5 : 2
+      context.beginPath()
+      context.arc(labelPosition.x, labelPosition.y, LABEL_CIRCLE_RADIUS, 0, Math.PI * 2)
+      context.stroke()
+
       context.fillStyle = isLabelHovered ? CLOSE_INDICATOR_COLOR : displayColor
       context.font = 'bold 16px system-ui, sans-serif'
       context.textAlign = 'center'
       context.textBaseline = 'middle'
-      context.fillText(String(index + 1), labelPosition.x, labelPosition.y)
+      context.fillText(String(index + 1), labelPosition.x, labelPosition.y + 1)
 
       if (shape.showName && shape.name.trim().length > 0) {
         const namePosition = getShapeBottomCenter(shape.points)
@@ -750,18 +1039,42 @@ function DrawingCanvas() {
             <div className="shape-menu__section">
               <h2 className="shape-menu__title">Coordinates</h2>
               <ul className="shape-menu__coordinates">
-                {selectedShape.points.map((point, index) => (
-                  <li
-                    key={`${selectedShapeIndex}-${index}`}
-                    className={
-                      highlightedCoordinateIndex === index
-                        ? 'shape-menu__coordinate-item shape-menu__coordinate-item--active'
-                        : 'shape-menu__coordinate-item'
-                    }
-                  >
-                    ({point.x.toFixed(1)}, {point.y.toFixed(1)})
-                  </li>
-                ))}
+                {selectedShape.points.map((point, index) => {
+                  const isDeleteDisabled = selectedShape.points.length <= 3
+
+                  return (
+                    <li
+                      key={`${selectedShapeIndex}-${index}`}
+                      className={
+                        highlightedCoordinateIndex === index || hoveredCoordinateIndex === index
+                          ? 'shape-menu__coordinate-item shape-menu__coordinate-item--active'
+                          : 'shape-menu__coordinate-item'
+                      }
+                      onMouseEnter={() => {
+                        setHoveredCoordinateIndex(index)
+                        setHoveredPointTarget({ shapeIndex: selectedShapeIndex, pointIndex: index })
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredCoordinateIndex(null)
+                        setHoveredPointTarget(null)
+                      }}
+                    >
+                      <span>
+                        ({point.x.toFixed(1)}, {point.y.toFixed(1)})
+                      </span>
+                      <button
+                        type="button"
+                        className="shape-menu__coordinate-delete"
+                        onClick={() => deletePointByIndex(selectedShapeIndex, index)}
+                        disabled={isDeleteDisabled}
+                        aria-label={`Delete point ${index + 1}`}
+                        title={isDeleteDisabled ? 'A shape must keep at least 3 points.' : undefined}
+                      >
+                        <i className="fa-solid fa-trash" aria-hidden="true" />
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             </div>
 
