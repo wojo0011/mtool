@@ -1,5 +1,19 @@
 # React + TypeScript + Vite
 
+## Deploy to GitHub Pages
+
+This project includes an automated GitHub Pages deployment workflow in [.github/workflows/deploy-pages.yml](.github/workflows/deploy-pages.yml).
+
+1. Push this repository to GitHub (default branch: `main`).
+2. In GitHub, open **Settings → Pages**.
+3. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+4. Push to `main` (or run the workflow manually from **Actions**).
+
+The site is built from `dist` and deployed automatically. The Vite `base` path is set automatically for both:
+
+- project pages (`https://<user>.github.io/<repo>/`)
+- user/org pages (`https://<user>.github.io/`)
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

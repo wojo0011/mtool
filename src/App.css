@@ -253,6 +253,52 @@
   cursor: crosshair;
 }
 
+.measurement-editor {
+  position: absolute;
+  z-index: 15;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.measurement-input {
+  width: 88px;
+  height: 32px;
+  border: 1px solid #3b82f6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+  outline: none;
+  box-shadow: 0 0 0 2px #bfdbfe;
+}
+
+.measurement-input:hover {
+  cursor: pointer;
+}
+
+.measurement-editor__action {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.measurement-editor__action:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
 .grid-controls {
   position: absolute;
   right: 1rem;
@@ -272,6 +318,16 @@
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.grid-download {
+  min-width: 34px;
+  padding: 0.45rem 0.6rem;
+}
+
+.grid-download:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .grid-toggle--active {
